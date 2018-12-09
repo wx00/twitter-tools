@@ -1,5 +1,3 @@
 python-twitter
-requests
-requests_oauthlib
 pyyaml
 openpyxl
