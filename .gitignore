@@ -14,4 +14,4 @@ idea/
 block_failed_ids.list
 unblock_failed_ids.list
 
-friends.xlsx
+*.xlsx

@@ -1,22 +1,21 @@
 #!/usr/bin/env python3
 
-from openpyxl import Workbook
-
 from common import api, confirm
+from utils import get_friends, get_followers, save_users
 
-friends_cursor = -1
-friends = []
 
-print('Getting following list...')
-while friends_cursor != 0:
-    friends_cursor, _, ids = api.GetFriendsPaged(cursor=friends_cursor)
-    friends += ids
-print('You have %d followings' % len(friends))
+def backup_friends(api, file='friends.xlsx'):
+    save_users(get_friends(api), file)
 
-wb = Workbook()
-ws = wb.active
 
-for user in friends:
-    ws.append([user.id, '@%s' % user.screen_name, user.name, 'https://twitter.com/%s' % user.screen_name])
+def backup_followers(api, file='followers.xlsx'):
+    save_users(get_followers(api), file)
 
-wb.save('friends.xlsx')
+
+
+if __name__ == "__main__":
+    if confirm('Save friends list?[Y/n]', default=True):
+        backup_friends(api)
+
+    if confirm('Save followers list?[Y/n]', default=True):
+        backup_followers(api)
