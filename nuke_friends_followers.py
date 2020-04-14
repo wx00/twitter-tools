@@ -10,7 +10,7 @@ if __name__ == "__main__":
     friend_ids = get_friend_ids(api)
     follower_ids = get_follower_ids(api)
 
-    ids_to_delete = set(follower_ids + friend_ids)
+    ids_to_delete = set(follower_ids) | set(friend_ids)
 
     print(f'You have {len(ids_to_delete)} followers/friends in total.')
 

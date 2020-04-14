@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
+
 from argparse import ArgumentTypeError
+import datetime
+import pickle
 
 from concurrent.futures import ThreadPoolExecutor
 
@@ -7,13 +10,15 @@ from openpyxl import Workbook
 from twitter import TwitterError
 
 # typing import
-from requests.models import Response
 from typing import Callable, Iterable, List, Optional, TextIO, Union
 from twitter import Api, User
 
 
+_FILE_CACHE_MINUTES = 15
+
+
 def static_vars(**kwargs):
-    def decorate(func):
+    def decorate(func: Callable):
         for k in kwargs:
             setattr(func, k, kwargs[k])
         return func
@@ -22,23 +27,43 @@ def static_vars(**kwargs):
 
 
 @static_vars(_cache=None)
+def get_own(api: Api) -> User:
+    if get_own._cache:
+        return get_own._cache
+    data: User = api.VerifyCredentials(skip_status=True)
+    get_own._cache = data
+    return data
+
+
 def get_own_id(api: Api) -> int:
-    if get_own_id._cache:
-        return get_own_id._cache['id']
-    url = 'https://api.twitter.com/1.1/account/verify_credentials.json'
-    parameters = {}
-    parameters['skip_status'] = True
-    resp: Response = api._RequestUrl(url, 'GET', data=parameters)
-    # extra lines for typing..
-    content: bytes = resp.content
-    data = api._ParseAndCheckTwitter(content.decode('utf-8'))
-    get_own_id._cache = data
-    return data['id']
+    return get_own(api).id
+
+
+def write_cache(filename: str, data):
+    try:
+        with open(filename, 'wb') as f:
+            content = {
+                'date': datetime.datetime.now(),
+                'data': data,
+            }
+            pickle.dump(content, f, protocol=pickle.HIGHEST_PROTOCOL)
+        return content
+    except IOError:
+        return None
+
+
+def load_cache(filename: str):
+    try:
+        with open(filename, 'rb') as f:
+            c = pickle.load(f)
+            return c
+    except IOError:
+        return None
 
 
 def save_list(filename: str, content: Iterable):
     with open(filename, mode='w', encoding='utf-8') as f:
-        f.writelines(content)
+        f.writelines(map(lambda c: f'{c}\n', content))
 
 
 def str2bool(arg: Union[None, bool, str]) -> Union[None, bool]:
@@ -188,30 +213,61 @@ def get_followers(api: Api, printing: Optional[bool] = True, **kwargs) -> List:
 def get_friend_ids(api: Api, printing: Optional[bool] = True, **kwargs) -> List:
     if printing:
         print('Getting following list...')
+
+    screenname_flag: bool = 'screen_name' in kwargs
+    if screenname_flag:
+        _cache_fn = f'.friend_ids.{kwargs["screen_name"]}.cache'
+    else:
+        _cache_fn = f'.friend_ids.{get_own_id(api)}.cache'
+    c = load_cache(_cache_fn)
+    if not (
+        c is None
+        or (datetime.datetime.now() - c['date'])
+        > datetime.timedelta(minutes=_FILE_CACHE_MINUTES)
+    ):
+        return c['data']
+
     try:
         friend_ids = cursor_call(api.GetFriendIDsPaged, **kwargs)
     except TwitterError as e:
         op = ''
-        if 'screen_name' in kwargs:
+        if screenname_flag:
             op = f' of user: {kwargs["screen_name"]}'
         print(f'Error getting friend ids{op}.\n{e}')
         return []
     if printing:
         print(f'You have {len(friend_ids)} followings')
+
+    write_cache(_cache_fn, friend_ids)
     return friend_ids
 
 
 def get_follower_ids(api: Api, printing: Optional[bool] = True, **kwargs) -> List:
     if printing:
         print('Getting followers list')
+
+    screenname_flag: bool = 'screen_name' in kwargs
+    if screenname_flag:
+        _cache_fn = f'.follower_ids.{kwargs["screen_name"]}.cache'
+    else:
+        _cache_fn = f'.follower_ids.{get_own_id(api)}.cache'
+    c = load_cache(_cache_fn)
+    if not (
+        c is None
+        or (datetime.datetime.now() - c['date'])
+        > datetime.timedelta(minutes=_FILE_CACHE_MINUTES)
+    ):
+        return c['data']
+
     try:
         follower_ids = cursor_call(api.GetFollowerIDsPaged, **kwargs)
     except TwitterError as e:
         op = ''
-        if 'screen_name' in kwargs:
+        if screenname_flag:
             op = f' of user: {kwargs["screen_name"]}'
         print(f'Error getting follower ids{op}.\n{e}')
         return []
     if printing:
         print(f'You have {len(follower_ids)} followers')
+    write_cache(_cache_fn, follower_ids)
     return follower_ids

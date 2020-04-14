@@ -62,7 +62,7 @@ def get_access_token(ck, cs):
 def load_credentials():
     try:
         with open('.twitter_credentials.yml') as f:
-            c = yaml.load(f)
+            c = yaml.load(f, Loader=yaml.FullLoader)
             return {
                 'ck': c['consumer_key'],
                 'cs': c['consumer_secret'],
